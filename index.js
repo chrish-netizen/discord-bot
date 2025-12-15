@@ -261,3 +261,9 @@ setInterval(() => {
 // LOGIN
 // =====================
 client.login(process.env.DISCORD_TOKEN);
+const http = require('http');
+const server = http.createServer((req, res) => res.end('Bot is running'));
+
+server.listen(10000, () => {
+  console.log('Server listening on port 10000');
+});
