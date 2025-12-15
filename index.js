@@ -106,6 +106,23 @@ function detectMood(text) {
 // AFK SYSTEM
 // =====================
 const afkUsers = new Map();  // Store AFK status of users
+const AFK_TIMEOUT = 30 * 60 * 1000;  // AFK timeout duration (30 minutes)
+
+// Auto-remove AFK status after the specified timeout
+function removeAFK(guildId, userId) {
+  if (afkUsers.has(userId)) {
+    afkUsers.delete(userId);
+    const embed = new EmbedBuilder()
+      .setTitle(`${userId} is no longer AFK`)
+      .setColor(0x00ff00)
+      .setDescription(`Hey, <@${userId}> is back online and no longer AFK!`);
+
+    const guild = client.guilds.cache.get(guildId);
+    if (guild && guild.systemChannel) {
+      guild.systemChannel.send({ embeds: [embed] });
+    }
+  }
+}
 
 // =====================
 // PERSONA
@@ -152,6 +169,9 @@ client.on("messageCreate", async (message) => {
       .setColor(0x5865f2)
       .setDescription("You are marked as AFK. People can see your AFK status.")
       .setFooter({ text: "AFK status will be removed once you send a message" });
+
+    // Set a timer to auto-remove AFK after the timeout
+    setTimeout(() => removeAFK(guildId, userId), AFK_TIMEOUT);
 
     return message.channel.send({ embeds: [embed] });
   }
