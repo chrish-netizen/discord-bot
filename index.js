@@ -2,13 +2,11 @@ require("dotenv").config();
 const fs = require("fs");
 const { Client, GatewayIntentBits, EmbedBuilder } = require("discord.js");
 const OpenAI = require("openai");
-const http = require('http');
 
-// OWNER ID
 const OWNER_ID = process.env.OWNER_ID;
 
 // =====================
-// CLIENT SETUP
+// CLIENT
 // =====================
 const client = new Client({
   intents: [
@@ -20,7 +18,7 @@ const client = new Client({
 });
 
 // =====================
-// OPENAI SETUP
+// OPENAI
 // =====================
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -63,6 +61,24 @@ function addXP(guildId, userId, amount) {
   return leveledUp ? user.level : null;
 }
 
+function getUserLevel(guildId, userId) {
+  const levels = loadLevels();
+  return levels[guildId]?.[userId] || { level: 1, xp: 0 };
+}
+
+function getLeaderboard(guildId, limit = 10) {
+  const levels = loadLevels();
+  if (!levels[guildId]) return [];
+
+  return Object.entries(levels[guildId])
+    .sort((a, b) =>
+      b[1].level !== a[1].level
+        ? b[1].level - a[1].level
+        : b[1].xp - a[1].xp
+    )
+    .slice(0, limit);
+}
+
 // =====================
 // MEMORY
 // =====================
@@ -85,6 +101,11 @@ function detectMood(text) {
 
   return "neutral";
 }
+
+// =====================
+// AFK SYSTEM
+// =====================
+const afkUsers = new Map();  // Store AFK status of users
 
 // =====================
 // PERSONA
@@ -121,57 +142,29 @@ client.on("messageCreate", async (message) => {
   const text = message.content;
   const lower = text.toLowerCase();
 
-  // -------- !ping --------
-  if (lower === "!ping") {
-    const reply = await message.reply("pong.");
-    const latency = reply.createdTimestamp - message.createdTimestamp;
-    const apiLatency = Math.round(client.ws.ping);
-
-    return reply.edit(
-      `🏓 **Pong!**\nMessage latency: **${latency}ms**\nAPI latency: **${apiLatency}ms**`
-    );
-  }
-
-  // -------- !restart (OWNER ONLY) --------
-  if (lower === "!restart") {
-    if (userId !== OWNER_ID)
-      return message.reply("nah. you don’t have the keys.");
-
-    await message.reply("restarting...");
-
-    // Restarting logic for local/server setups
-    setTimeout(() => {
-      process.exit(1);  // Trigger restart manually (Render restarts services automatically)
-    }, 1000);
-  }
-
-  // -------- !level --------
-  if (lower === "!level") {
-    const data = getUserLevel(guildId, userId);
-    return message.reply(
-      `Level **${data.level}**, **${data.xp} XP**. respectable.`
-    );
-  }
-
-  // -------- !leaderboard (EMBED) --------
-  if (lower === "!leaderboard") {
-    const board = getLeaderboard(guildId);
-    if (!board.length)
-      return message.channel.send("nobody’s grinding yet.");
+  // -------- !afk --------
+  if (lower === "!afk") {
+    // Set the user as AFK
+    afkUsers.set(userId, { message: "I am currently AFK. Please leave a message!" });
 
     const embed = new EmbedBuilder()
-      .setTitle("🏆 Server Leaderboard")
+      .setTitle(`${message.author.tag} is now AFK`)
       .setColor(0x5865f2)
-      .setDescription(
-        board
-          .map(
-            ([id, data], i) =>
-              `**${i + 1}.** <@${id}> — Level ${data.level} (${data.xp} XP)`
-          )
-          .join("\n")
-      );
+      .setDescription("You are marked as AFK. People can see your AFK status.")
+      .setFooter({ text: "AFK status will be removed once you send a message" });
 
     return message.channel.send({ embeds: [embed] });
+  }
+
+  // -------- User mentioned check for AFK --------
+  if (afkUsers.has(userId)) {
+    const afkEmbed = new EmbedBuilder()
+      .setTitle(`${message.author.tag} is AFK!`)
+      .setColor(0xff0000)
+      .setDescription(afkUsers.get(userId).message)
+      .setFooter({ text: "This user is currently AFK." });
+
+    return message.channel.send({ embeds: [afkEmbed] });
   }
 
   // -------- XP FOR TALKING --------
@@ -249,11 +242,3 @@ setInterval(() => {
 // LOGIN
 // =====================
 client.login(process.env.DISCORD_TOKEN);
-
-// =====================
-// KEEP SERVER ALIVE
-// =====================
-const server = http.createServer((req, res) => res.end('Bot is running'));
-server.listen(10000, () => {
-  console.log('Server listening on port 10000');
-});
