@@ -2,11 +2,13 @@ require("dotenv").config();
 const fs = require("fs");
 const { Client, GatewayIntentBits, EmbedBuilder } = require("discord.js");
 const OpenAI = require("openai");
+const http = require('http');
 
+// OWNER ID
 const OWNER_ID = process.env.OWNER_ID;
 
 // =====================
-// CLIENT
+// CLIENT SETUP
 // =====================
 const client = new Client({
   intents: [
@@ -18,7 +20,7 @@ const client = new Client({
 });
 
 // =====================
-// OPENAI
+// OPENAI SETUP
 // =====================
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -59,24 +61,6 @@ function addXP(guildId, userId, amount) {
 
   saveLevels(levels);
   return leveledUp ? user.level : null;
-}
-
-function getUserLevel(guildId, userId) {
-  const levels = loadLevels();
-  return levels[guildId]?.[userId] || { level: 1, xp: 0 };
-}
-
-function getLeaderboard(guildId, limit = 10) {
-  const levels = loadLevels();
-  if (!levels[guildId]) return [];
-
-  return Object.entries(levels[guildId])
-    .sort((a, b) =>
-      b[1].level !== a[1].level
-        ? b[1].level - a[1].level
-        : b[1].xp - a[1].xp
-    )
-    .slice(0, limit);
 }
 
 // =====================
@@ -153,8 +137,12 @@ client.on("messageCreate", async (message) => {
     if (userId !== OWNER_ID)
       return message.reply("nah. you don’t have the keys.");
 
-    await message.reply("restarting. don’t miss me.");
-    process.exit(0);
+    await message.reply("restarting...");
+
+    // Restarting logic for local/server setups
+    setTimeout(() => {
+      process.exit(1);  // Trigger restart manually (Render restarts services automatically)
+    }, 1000);
   }
 
   // -------- !level --------
@@ -261,9 +249,11 @@ setInterval(() => {
 // LOGIN
 // =====================
 client.login(process.env.DISCORD_TOKEN);
-const http = require('http');
-const server = http.createServer((req, res) => res.end('Bot is running'));
 
+// =====================
+// KEEP SERVER ALIVE
+// =====================
+const server = http.createServer((req, res) => res.end('Bot is running'));
 server.listen(10000, () => {
   console.log('Server listening on port 10000');
 });
